@@ -1,0 +1,203 @@
+--- /workspace/opti2x/runs/star-2.7.11b/baseline/worktree/source/Transcript.h	2026-09-10 00:42:25.000000000 +0000
++++ /workspace/opti2x/runs/star-2.7.11b/experiments/candidate-wave2/worktree/source/Transcript.h	2026-09-10 01:10:14.338188638 +0000
+@@ -61,6 +61,9 @@
+     std::set <uint32> alignGenes;
+ 
+     Transcript(); //resets to 0
++    Transcript(const Transcript& t);
++    Transcript& operator=(const Transcript& t);
++    void copyStitchCore(const Transcript& t); // scalars+exons/SJ only; no containers
+     void reset(); //reset to 0
+     void resetMapG(); // reset map to 0
+     void resetMapG(uint); // reset map to 0 for Lread bases
+--- /workspace/opti2x/runs/star-2.7.11b/baseline/worktree/source/Transcript.cpp	2026-09-10 00:42:25.000000000 +0000
++++ /workspace/opti2x/runs/star-2.7.11b/experiments/candidate-wave2/worktree/source/Transcript.cpp	2026-09-10 01:10:14.358188650 +0000
+@@ -1,10 +1,115 @@
+ #include "Transcript.h"
++#include <cstring>
+ 
+ Transcript::Transcript()
+ {
+     reset();
+ };
+ 
++Transcript::Transcript(const Transcript& t) {
++    *this = t;
++}
++
++Transcript& Transcript::operator=(const Transcript& t) {
++    if (this == &t) return *this;
++    // Scalars / pointers (shallow for readName etc., matching default copy)
++    nExons = t.nExons;
++    readLengthOriginal = t.readLengthOriginal;
++    readLength = t.readLength;
++    Lread = t.Lread;
++    readLengthPairOriginal = t.readLengthPairOriginal;
++    iRead = t.iRead;
++    readNmates = t.readNmates;
++    readName = t.readName;
++    iFrag = t.iFrag;
++    rStart = t.rStart; roStart = t.roStart; rLength = t.rLength;
++    gStart = t.gStart; gLength = t.gLength; cStart = t.cStart;
++    Chr = t.Chr; Str = t.Str; roStr = t.roStr;
++    haploType = t.haploType;
++    primaryFlag = t.primaryFlag;
++    nMatch = t.nMatch; nMM = t.nMM; mappedLength = t.mappedLength;
++    extendL = t.extendL; maxScore = t.maxScore;
++    nGap = t.nGap; lGap = t.lGap; nDel = t.nDel; nIns = t.nIns; lDel = t.lDel; lIns = t.lIns;
++    nUnique = t.nUnique; nAnchor = t.nAnchor;
++    intronMotifs[0] = t.intronMotifs[0];
++    intronMotifs[1] = t.intronMotifs[1];
++    intronMotifs[2] = t.intronMotifs[2];
++    sjMotifStrand = t.sjMotifStrand;
++    sjYes = t.sjYes;
++    // Only copy used exon / SJ slots (nExons exons; nExons-1 junctions when nExons>0)
++    if (nExons > 0) {
++        std::memcpy(exons, t.exons, nExons * sizeof(exons[0]));
++        if (nExons > 1) {
++            const uint nJ = nExons - 1;
++            std::memcpy(shiftSJ, t.shiftSJ, nJ * sizeof(shiftSJ[0]));
++            std::memcpy(canonSJ, t.canonSJ, nJ * sizeof(canonSJ[0]));
++            std::memcpy(sjAnnot, t.sjAnnot, nJ * sizeof(sjAnnot[0]));
++            std::memcpy(sjStr, t.sjStr, nJ * sizeof(sjStr[0]));
++        }
++    }
++    // Skip container churn when both empty (common during stitch forks).
++    if (!t.varInd.empty() || !varInd.empty()) {
++        if (t.varInd.empty()) varInd.clear(); else varInd = t.varInd;
++    }
++    if (!t.varGenCoord.empty() || !varGenCoord.empty()) {
++        if (t.varGenCoord.empty()) varGenCoord.clear(); else varGenCoord = t.varGenCoord;
++    }
++    if (!t.varReadCoord.empty() || !varReadCoord.empty()) {
++        if (t.varReadCoord.empty()) varReadCoord.clear(); else varReadCoord = t.varReadCoord;
++    }
++    if (!t.varAllele.empty() || !varAllele.empty()) {
++        if (t.varAllele.empty()) varAllele.clear(); else varAllele = t.varAllele;
++    }
++    if (!t.alignGenes.empty() || !alignGenes.empty()) {
++        if (t.alignGenes.empty()) alignGenes.clear(); else alignGenes = t.alignGenes;
++    }
++    if (!t.cigar.empty() || !cigar.empty()) {
++        if (t.cigar.empty()) cigar.clear(); else cigar = t.cigar;
++    }
++    return *this;
++}
++
++
++
++
++void Transcript::copyStitchCore(const Transcript& t) {
++    // Hot stitch fork: copy state used by stitchWindowAligns / stitchAlign / extend / finalize
++    // without touching var*/alignGenes/cigar (empty during stitch recursion).
++    nExons = t.nExons;
++    readLengthOriginal = t.readLengthOriginal;
++    readLength = t.readLength;
++    Lread = t.Lread;
++    readLengthPairOriginal = t.readLengthPairOriginal;
++    iRead = t.iRead;
++    readNmates = t.readNmates;
++    readName = t.readName;
++    iFrag = t.iFrag;
++    rStart = t.rStart; roStart = t.roStart; rLength = t.rLength;
++    gStart = t.gStart; gLength = t.gLength; cStart = t.cStart;
++    Chr = t.Chr; Str = t.Str; roStr = t.roStr;
++    haploType = t.haploType;
++    primaryFlag = t.primaryFlag;
++    nMatch = t.nMatch; nMM = t.nMM; mappedLength = t.mappedLength;
++    extendL = t.extendL; maxScore = t.maxScore;
++    nGap = t.nGap; lGap = t.lGap; nDel = t.nDel; nIns = t.nIns; lDel = t.lDel; lIns = t.lIns;
++    nUnique = t.nUnique; nAnchor = t.nAnchor;
++    intronMotifs[0] = t.intronMotifs[0];
++    intronMotifs[1] = t.intronMotifs[1];
++    intronMotifs[2] = t.intronMotifs[2];
++    sjMotifStrand = t.sjMotifStrand;
++    sjYes = t.sjYes;
++    if (nExons > 0) {
++        std::memcpy(exons, t.exons, nExons * sizeof(exons[0]));
++        if (nExons > 1) {
++            const uint nJ = nExons - 1;
++            std::memcpy(shiftSJ, t.shiftSJ, nJ * sizeof(shiftSJ[0]));
++            std::memcpy(canonSJ, t.canonSJ, nJ * sizeof(canonSJ[0]));
++            std::memcpy(sjAnnot, t.sjAnnot, nJ * sizeof(sjAnnot[0]));
++            std::memcpy(sjStr, t.sjStr, nJ * sizeof(sjStr[0]));
++        }
++    }
++}
++
+ void Transcript::reset() {
+     extendL=0;
+ 
+--- /workspace/opti2x/runs/star-2.7.11b/baseline/worktree/source/stitchWindowAligns.h	2026-09-10 00:42:25.000000000 +0000
++++ /workspace/opti2x/runs/star-2.7.11b/experiments/candidate-wave2/worktree/source/stitchWindowAligns.h	2026-09-10 00:59:43.853817861 +0000
+@@ -5,7 +5,7 @@
+ #include "stitchAlignToTranscript.h"
+ #include "ReadAlign.h"
+ 
+-void stitchWindowAligns(uint iA, uint nA, int Score, bool WAincl[], uint tR2, uint tG2, Transcript trA, \
++void stitchWindowAligns(uint iA, uint nA, int Score, bool WAincl[], uint tR2, uint tG2, Transcript &trA, \
+                         uint Lread, uiWA* WA, char* R, Genome &mapGen, \
+                         Parameters& P, Transcript** wTr, uint* nWinTr, ReadAlign *RA);
+     //recursively stitch aligns for one gene
+--- /workspace/opti2x/runs/star-2.7.11b/baseline/worktree/source/stitchWindowAligns.cpp	2026-09-10 00:42:25.000000000 +0000
++++ /workspace/opti2x/runs/star-2.7.11b/experiments/candidate-wave2/worktree/source/stitchWindowAligns.cpp	2026-09-10 01:10:14.342188641 +0000
+@@ -5,7 +5,7 @@
+ #include <cmath>
+ #include <ctime>
+ 
+-void stitchWindowAligns(uint iA, uint nA, int Score, bool WAincl[], uint tR2, uint tG2, Transcript trA, \
++void stitchWindowAligns(uint iA, uint nA, int Score, bool WAincl[], uint tR2, uint tG2, Transcript &trA, \
+                         uint Lread, uiWA* WA, char* R, Genome &mapGen, \
+                         Parameters& P, Transcript** wTr, uint* nWinTr, ReadAlign *RA) {
+     //recursively stitch aligns for one gene
+@@ -309,7 +309,8 @@
+ 
+     ///////////////////////////////////////////////////////////////////////////////////
+     int dScore=0;
+-    Transcript trAi=trA; //trA copy with this align included, to be used in the 1st recursive call of StitchAlign
++    Transcript trAi; //trA stitch-core copy with this align included
++    trAi.copyStitchCore(trA);
+     if (trA.nExons>0) {//stitch, a transcript has already been originated
+ 
+         dScore=stitchAlignToTranscript(tR2, tG2, WA[iA][WA_rStart], WA[iA][WA_gStart], WA[iA][WA_Length], WA[iA][WA_iFrag],  WA[iA][WA_sjA], P, R, mapGen, &trAi, RA->outFilterMismatchNmaxTotal);
+--- /workspace/opti2x/runs/star-2.7.11b/baseline/worktree/source/extendAlign.cpp	2026-09-10 00:42:25.000000000 +0000
++++ /workspace/opti2x/runs/star-2.7.11b/experiments/candidate-wave2/worktree/source/extendAlign.cpp	2026-09-10 01:10:14.362188653 +0000
+@@ -56,6 +56,12 @@
+ };
+ 
+ 
++// Hoist constant mismatch break budget (was recomputed every MM iteration).
++// Break when nMM+nMMprev >= min(pMMmax*(Lprev+L), nMMmax) — L fixed in this call.
++const double mmBreakD = (pMMmax * double(Lprev + L) < double(nMMmax))
++    ? (pMMmax * double(Lprev + L)) : double(nMMmax);
++const uint mmBreak = (uint)mmBreakD; // floor; matches prior min(...) then >= compare semantics for typical values
++
+ for (int i=0;i<(int) L;i++) {
+     iS=dR*i;
+     iG=dG*i;
+@@ -67,7 +73,10 @@
+         nMatch++;
+         Score += scoreMatch;
+         if (Score>trA->maxScore) {//record new maximum
+-            if (nMM+nMMprev <= min(pMMmax*double(Lprev+i+1), double(nMMmax)) ) {//check nMM, if too many mismatches - do not record this maximum. Do not break - there might be still hope to make a long extension
++            // nMM+nMMprev <= min(pMMmax*(Lprev+i+1), nMMmax)
++            const double lim = (pMMmax * double(Lprev+i+1) < double(nMMmax))
++                ? (pMMmax * double(Lprev+i+1)) : double(nMMmax);
++            if (nMM+nMMprev <= lim ) {//check nMM, if too many mismatches - do not record this maximum. Do not break - there might be still hope to make a long extension
+                 trA->extendL=i+1;
+                 trA->maxScore=Score;
+                 trA->nMatch=nMatch;
+@@ -75,7 +84,7 @@
+             };
+         };
+     } else {//MM
+-        if (nMM+nMMprev >= min(pMMmax*double(Lprev+L), double(nMMmax)) ) {//there is no hope to extend it further, break
++        if (nMM+nMMprev >= mmBreak ) {//there is no hope to extend it further, break
+             break;
+         };
+ 
+@@ -90,4 +99,3 @@
+ return extDone;
+ 
+ };
+-
